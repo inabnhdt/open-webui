@@ -233,7 +233,7 @@ const nodes = {
     options: [
       { text: "Primär degenerativ (Alzheimer) - schleichender Beginn, stetige Verschlechterung, keine andere Ursache", next: "alzheimer_onset" },
       { text: "Vaskulär - Zusammenhang mit zerebrovaskulärer Erkrankung, ungleiche kognitive Defizite, fokale Zeichen", next: "vaskular_typ" },
-      { text: "Andere klassifizierte Krankheit (z.B. Parkinson, HIV, Creutzfeldt-Jakob, Huntington)", next: "f02" },
+      { text: "Andere klassifizierte Krankheit (z.B. Parkinson, HIV, Creutzfeldt-Jakob, Huntington)", next: "f02_typ" },
       { text: "Ursache nicht bestimmbar", next: "f03" }
     ]
   },
@@ -338,15 +338,98 @@ const nodes = {
     title: "Gemischte / Sonstige / Nicht näher bezeichnete vaskuläre Demenz",
     description: "F01.3: Gemischte kortikale und subkortikale vaskuläre Demenz. F01.8: Sonstige vaskuläre Demenz. F01.9: Vaskuläre Demenz, nnb."
   },
-  f02: {
-    diagnosis: true,
-    code: "F02*",
-    title: "Demenz bei andernorts klassifizierten Krankheiten",
-    description: "Demenz als Folge einer anderen spezifischen Grunderkrankung (z.B. Morbus Pick, Creutzfeldt-Jakob, Morbus Huntington, Morbus Parkinson, HIV-Erkrankung).",
-    criteria: [
-      "Allgemeine Demenzkriterien (G1-G4) erfüllt",
-      "Grunderkrankung andernorts klassifiziert und nachgewiesen"
+  f02_typ: {
+    question: "Welche Grunderkrankung liegt der Demenz zugrunde?",
+    info: "F02: Demenz bei andernorts klassifizierten Krankheiten - andere Ursache als Alzheimer oder zerebrovaskuläre Erkrankung. Demenzkriterien müssen erfüllt sein.",
+    options: [
+      { text: "Pick-Krankheit - Frontalhirnsymptome, Persönlichkeitsänderung, Verlust sozialer Fertigkeiten", next: "f020" },
+      { text: "Creutzfeldt-Jakob - rasche Progredienz, vielfältige neurologische Symptome, Tod innerhalb von 2 Jahren", next: "f021" },
+      { text: "Chorea Huntington - choreatiforme Bewegungen, autosomal erblich, subkortikale Funktionen zuerst betroffen", next: "f022" },
+      { text: "Parkinson / HIV / Sonstige", next: "f02_rest" }
     ]
+  },
+  f02_rest: {
+    question: "Welche Grunderkrankung liegt vor?",
+    options: [
+      { text: "Primäres Parkinson-Syndrom - kognitive Einschränkungen nicht durch Medikation bedingt", next: "f023" },
+      { text: "HIV-Krankheit - HIV-Diagnose gesichert", next: "f024" },
+      { text: "Sonstige Krankheit (z.B. Epilepsie, Niazin-Mangel, MS, SHT)", next: "f028" }
+    ]
+  },
+  f020: {
+    diagnosis: true,
+    code: "F02.0",
+    title: "Demenz bei Pick-Krankheit",
+    description: "Mittleres Lebensalter, frühe, langsam fortschreitende Persönlichkeitsänderung und Verlust sozialer Fertigkeiten. Frontalhirnsymptome dominieren.",
+    criteria: [
+      "Demenzkriterien erfüllt",
+      "Langsamer Beginn mit fortschreitendem Abbau",
+      "Vorwiegen von Frontalhirnsymptomen, mind. 2 Merkmale:",
+      "- Emotionale Verflachung",
+      "- Vergröberung des Sozialverhaltens",
+      "- Enthemmung",
+      "- Apathie oder Ruhelosigkeit",
+      "- Aphasie",
+      "In frühen Stadien: relativer Erhalt des Gedächtnisses und der Parietallappenfunktionen"
+    ]
+  },
+  f021: {
+    diagnosis: true,
+    code: "F02.1",
+    title: "Demenz bei Creutzfeldt-Jakob-Krankheit",
+    description: "Mittleres Lebensalter, aggressiver Verlauf mit Tod innerhalb von 2 Jahren, sehr rasche Desintegration aller höherer zerebraler Funktionen.",
+    criteria: [
+      "Langsamer Beginn mit fortschreitendem Abbau",
+      "Sehr rasche Progredienz mit Desintegration aller höherer zerebraler Funktionen",
+      "Mind. 1 neurologisches Symptom mit oder nach Beginn der Demenz:",
+      "- Pyramidenbahnzeichen",
+      "- Extrapyramidale Symptome",
+      "- Aphasie",
+      "- Sehstörungen"
+    ]
+  },
+  f022: {
+    diagnosis: true,
+    code: "F02.2",
+    title: "Demenz bei Chorea Huntington",
+    description: "Ausgeprägte Hirndegeneration, autosomal erblich, Beginn ab 3. Dekade, langsame Progredienz mit Tod nach 10-15 Jahren.",
+    criteria: [
+      "Langsamer Beginn mit fortschreitendem Abbau",
+      "Subkortikale Funktionen zuerst betroffen (Denkverlangsamung, Bewegungsabnahme, Apathie/Depression)",
+      "Unwillkürliche choreatiforme Bewegungen (vorwiegend Gesicht, Hände, Schultern, Gang)",
+      "Huntington-Erkrankung bei Elternteil oder Geschwister",
+      "Fehlen anderweitiger Erklärung"
+    ]
+  },
+  f023: {
+    diagnosis: true,
+    code: "F02.3",
+    title: "Demenz bei primärem Parkinson-Syndrom",
+    description: "Demenz im Verlauf einer Parkinson-Erkrankung, kognitive Einschränkungen nicht durch Parkinson-Medikation bedingt.",
+    criteria: [
+      "Langsamer Beginn mit fortschreitendem Abbau",
+      "Vorliegen einer Parkinson-Erkrankung",
+      "Kognitive Einschränkungen nicht Folge einer Parkinson-Medikation",
+      "Keine Hinweise auf andere Ursache der Demenz oder Substanzmissbrauch"
+    ],
+    exclusion: "Wenn Kriterien für F00.1 erfüllt, dann F00.1 mit G20-Kodierung vergeben"
+  },
+  f024: {
+    diagnosis: true,
+    code: "F02.4",
+    title: "Demenz bei HIV-Krankheit",
+    description: "Demenz im Verlauf einer gesicherten HIV-Erkrankung.",
+    criteria: [
+      "Langsamer Beginn mit fortschreitendem Abbau",
+      "HIV-Diagnose gesichert",
+      "Keine Hinweise auf andere Ursache der Demenz oder Substanzmissbrauch"
+    ]
+  },
+  f028: {
+    diagnosis: true,
+    code: "F02.8",
+    title: "Demenz bei sonstigen andernorts klassifizierten Krankheiten",
+    description: "Demenz bei anderen spezifischen Erkrankungen, z.B. Epilepsie, Niazin-Mangel, Multiple Sklerose, Schädel-Hirn-Trauma."
   },
   f03: {
     diagnosis: true,

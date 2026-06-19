@@ -268,8 +268,24 @@ const TREE = {
                       detail: 'Gemischte kortikale/subkortikale, sonstige oder nnb vaskuläre Demenz' }
                   ]
                 },
-                { edge: 'Andere\nKrankheit', id: 'f02', label: 'F02*\nDemenz bei\nanderer Krk.', type: 'diagnosis', tags: ['demenz'], children: [],
-                  detail: 'Z.B. Parkinson, HIV, Creutzfeldt-Jakob, Huntington, Pick' },
+                {
+                  edge: 'Andere\nKrankheit',
+                  id: 'f02',
+                  label: 'F02*\nWelche\nGrunderkrankung?',
+                  type: 'decision',
+                  tags: ['demenz'],
+                  detail: 'Demenz bei andernorts klassifizierten Krankheiten - andere Ursache als Alzheimer oder zerebrovaskulär',
+                  children: [
+                    { edge: 'Pick', id: 'f020', label: 'F02.0\nPick-\nKrankheit', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Frontalhirnsymptome (mind. 2): Emotionale Verflachung, Vergröberung Sozialverhalten, Enthemmung, Apathie, Aphasie. Gedächtnis/Parietallappen anfangs erhalten' },
+                    { edge: 'Creutzfeldt-\nJakob', id: 'f021', label: 'F02.1\nCreutzfeldt-\nJakob', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Sehr rasche Progredienz, Tod < 2 Jahre. Mind. 1: Pyramidenbahnzeichen, extrapyramidale Symptome, Aphasie, Sehstörungen' },
+                    { edge: 'Huntington', id: 'f022', label: 'F02.2\nChorea\nHuntington', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Autosomal erblich, ab 3. Dekade. Subkortikale Funktionen zuerst, choreatiforme Bewegungen, Familienanamnese' },
+                    { edge: 'Parkinson/\nHIV/Sonstige', id: 'f02rest', label: 'F02.3/.4/.8\nParkinson/\nHIV/Sonstige', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'F02.3: Parkinson (kogn. Einschränkung nicht durch Medikation). F02.4: HIV-Diagnose gesichert. F02.8: Sonstige (Epilepsie, MS, Niazin-Mangel, SHT)' }
+                  ]
+                },
                 { edge: 'Unklar', id: 'f03', label: 'F03\nDemenz\nnnb', type: 'diagnosis', tags: ['demenz'], children: [],
                   detail: 'Demenzkriterien erfüllt, Ursache nicht bestimmbar.\nAusschluss: Senile Demenz mit Delir (F05.1), Senilität nnb (R54)' }
               ]
