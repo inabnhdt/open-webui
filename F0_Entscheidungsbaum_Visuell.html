@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICD-10 F0 Entscheidungsbaum - Visuelle Darstellung</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f0f4f8;
+    color: #1a202c;
+  }
+  .header {
+    background: linear-gradient(135deg, #2b6cb0, #4c51bf);
+    color: white;
+    padding: 1.5rem 2rem;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  }
+  .header h1 { font-size: 1.5rem; margin-bottom: 0.3rem; }
+  .header p { opacity: 0.85; font-size: 0.9rem; }
+  .controls {
+    display: flex;
+    justify-content: center;
+    gap: 0.8rem;
+    margin-top: 0.8rem;
+    flex-wrap: wrap;
+  }
+  .controls button {
+    padding: 0.4rem 1rem;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+  }
+  .controls button:hover { background: rgba(255,255,255,0.3); }
+  .controls button.active { background: rgba(255,255,255,0.35); border-color: white; }
+
+  .canvas-wrap {
+    overflow: auto;
+    padding: 2rem;
+    cursor: grab;
+  }
+  .canvas-wrap:active { cursor: grabbing; }
+
+  svg {
+    display: block;
+    margin: 0 auto;
+  }
+  .node rect, .node ellipse {
+    stroke-width: 2;
+    cursor: pointer;
+    transition: filter 0.2s, stroke-width 0.2s;
+  }
+  .node:hover rect, .node:hover ellipse {
+    filter: brightness(0.95) drop-shadow(0 2px 6px rgba(0,0,0,0.15));
+    stroke-width: 3;
+  }
+  .node text {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    pointer-events: none;
+  }
+  .edge line, .edge path {
+    stroke: #718096;
+    stroke-width: 1.8;
+    fill: none;
+  }
+  .edge-label {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 11px;
+    fill: #4a5568;
+  }
+  .legend {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    background: white;
+    border-radius: 10px;
+    padding: 1rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+    font-size: 0.8rem;
+    z-index: 50;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 1.5px solid #aaa;
+    flex-shrink: 0;
+  }
+
+  .highlight .node rect, .highlight .node ellipse {
+    opacity: 0.2;
+  }
+  .highlight .edge line, .highlight .edge path {
+    opacity: 0.1;
+  }
+  .highlight .edge-label { opacity: 0.15; }
+  .highlight .node.hl rect, .highlight .node.hl ellipse { opacity: 1; }
+  .highlight .edge.hl line, .highlight .edge.hl path { opacity: 1; stroke: #2b6cb0; stroke-width: 3; }
+  .highlight .edge-label.hl { opacity: 1; font-weight: 600; fill: #2b6cb0; }
+  .highlight .node text { opacity: 0.2; }
+  .highlight .node.hl text { opacity: 1; }
+
+  .tooltip {
+    position: fixed;
+    background: #1a202c;
+    color: white;
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    max-width: 350px;
+    line-height: 1.5;
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ICD-10 F0: Entscheidungsbaum</h1>
+  <p>Organische, einschließlich symptomatischer psychischer Störungen</p>
+  <div class="controls">
+    <button onclick="resetView()">Alles zeigen</button>
+    <button onclick="highlightPath('demenz')">Demenz-Pfad</button>
+    <button onclick="highlightPath('delir')">Delir-Pfad</button>
+    <button onclick="highlightPath('f06')">F06-Pfad</button>
+    <button onclick="highlightPath('f07')">F07-Pfad</button>
+    <button onclick="zoomIn()">+</button>
+    <button onclick="zoomOut()">&minus;</button>
+  </div>
+</div>
+
+<div class="canvas-wrap" id="canvasWrap">
+  <div id="svgContainer"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:#ebf8ff;border-color:#4299e1;"></div> Entscheidung</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#f0fff4;border-color:#48bb78;"></div> Diagnose</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#fffaf0;border-color:#ed8936;"></div> Ausschluss</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#faf5ff;border-color:#9f7aea;"></div> Subtypen</div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const TREE = {
+  id: 'start',
+  label: 'Organische\nUrsache?',
+  detail: 'Objektiver Nachweis / Anamnese einer zerebralen oder systemischen Erkrankung, die psychische Symptome verursachen kann?',
+  type: 'decision',
+  tags: ['demenz','delir','f06','f07'],
+  children: [
+    {
+      edge: 'Nein',
+      id: 'no_f0',
+      label: 'Kein F0',
+      detail: 'Ohne organische Ursache keine F0-Diagnose. Prüfe F1-F9.',
+      type: 'exclude',
+      tags: [],
+      children: []
+    },
+    {
+      edge: 'Ja',
+      id: 'bewusstsein',
+      label: 'Bewusstseins-\nstörung?',
+      detail: 'Liegt eine Bewusstseinseintrübung vor? (Verminderte Klarheit, reduzierte Aufmerksamkeit)',
+      type: 'decision',
+      tags: ['demenz','delir','f06','f07'],
+      children: [
+        {
+          edge: 'Ja',
+          id: 'delir',
+          label: 'Delir-Kriterien\nerfüllt?',
+          detail: 'Akuter Beginn, kognitive Störung, Desorientiertheit, psychomotorische Störung, Schlafstörung?',
+          type: 'decision',
+          tags: ['delir'],
+          children: [
+            {
+              edge: 'Ja',
+              id: 'delir_demenz',
+              label: 'Vorbestehende\nDemenz?',
+              type: 'decision',
+              tags: ['delir'],
+              children: [
+                { edge: 'Nein', id: 'f050', label: 'F05.0\nDelir ohne\nDemenz', type: 'diagnosis', tags: ['delir'], children: [], detail: 'Delir bei klarem Bewusstsein ohne vorbestehende Demenz. Ausschluss: substanzinduziertes Delir (F1x.4)' },
+                { edge: 'Ja', id: 'f051', label: 'F05.1\nDelir bei\nDemenz', type: 'diagnosis', tags: ['delir'], children: [], detail: 'Delir-Symptome im Verlauf einer vorbestehenden Demenz (F00-F03)' },
+                { edge: 'Sonstige', id: 'f058', label: 'F05.8/.9\nSonstiges/\nnnb Delir', type: 'diagnosis', tags: ['delir'], children: [], detail: 'Sonstige oder nicht näher bezeichnete Formen des Delirs' }
+              ]
+            },
+            {
+              edge: 'Nein',
+              id: 'weiter_demenz',
+              label: '→ weiter\nDemenz?',
+              type: 'link',
+              linkTo: 'demenz',
+              tags: ['delir'],
+              children: []
+            }
+          ]
+        },
+        {
+          edge: 'Nein',
+          id: 'demenz',
+          label: 'Demenz-\nkriterien\nerfüllt?',
+          detail: 'G1: Gedächtnisabnahme + kognitive Abnahme\nG2: Klares Bewusstsein\nG3: Affekt-/Sozialverhaltensänderung\nG4: ≥ 6 Monate',
+          type: 'decision',
+          tags: ['demenz','f06','f07'],
+          children: [
+            {
+              edge: 'Ja',
+              id: 'demenz_urs',
+              label: 'Ursache der\nDemenz?',
+              type: 'decision',
+              tags: ['demenz'],
+              children: [
+                {
+                  edge: 'Alzheimer',
+                  id: 'alzheimer',
+                  label: 'Beginn\nvor/nach 65?',
+                  detail: 'Primär degenerativ, schleichender Beginn, stetige Verschlechterung, keine andere Ursache',
+                  type: 'decision',
+                  tags: ['demenz'],
+                  children: [
+                    { edge: '< 65', id: 'f000', label: 'F00.0\nAlzheimer\nfrüh', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Beginn < 65 J. Rasche Verschlechterung, kortikale Störungen (Aphasie, Agraphie, Alexie, Akalkulie, Apraxie)' },
+                    { edge: '≥ 65', id: 'f001', label: 'F00.1\nAlzheimer\nspät', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Beginn ≥ 65 J. Langsame Progredienz, Gedächtnisstörung als Hauptmerkmal' },
+                    { edge: 'Atypisch', id: 'f002', label: 'F00.2\nAtypisch/\ngemischt', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Atypische oder gemischte Alzheimer-Demenz' },
+                    { edge: 'nnb', id: 'f009', label: 'F00.9\nAlzheimer\nnnb', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Alzheimer-Demenz, nicht näher bezeichnet' }
+                  ]
+                },
+                {
+                  edge: 'Vaskulär',
+                  id: 'vaskular',
+                  label: 'Verlaufstyp?',
+                  detail: 'Ungleiche kognitive Defizite + fokale Hirnschädigung + zerebrovaskuläre Erkrankung nachgewiesen',
+                  type: 'decision',
+                  tags: ['demenz'],
+                  children: [
+                    { edge: 'Akut\n(< 1-3 Mo\nnach SA)', id: 'f010', label: 'F01.0\nAkuter\nBeginn', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Demenz < 1-3 Monate nach Schlaganfällen' },
+                    { edge: 'Allmählich\n(3-6 Mo\nnach TIA)', id: 'f011', label: 'F01.1\nMulti-Infarkt', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Allmähliche Entwicklung (3-6 Mo) nach mehreren TIAs' },
+                    { edge: 'Subkortikal\n(Hypertonie)', id: 'f012', label: 'F01.2\nSubkortikal\n(Binswanger)', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Hypertonie + ischämische Herde im Marklager, Hirnrinde intakt' },
+                    { edge: 'Gemischt/\nSonstige', id: 'f013', label: 'F01.3/.8/.9\nGemischt/\nnnb', type: 'diagnosis', tags: ['demenz'], children: [],
+                      detail: 'Gemischte kortikale/subkortikale, sonstige oder nnb vaskuläre Demenz' }
+                  ]
+                },
+                { edge: 'Andere\nKrankheit', id: 'f02', label: 'F02*\nDemenz bei\nanderer Krk.', type: 'diagnosis', tags: ['demenz'], children: [],
+                  detail: 'Z.B. Parkinson, HIV, Creutzfeldt-Jakob, Huntington, Pick' },
+                { edge: 'Unklar', id: 'f03', label: 'F03\nDemenz\nnnb', type: 'diagnosis', tags: ['demenz'], children: [],
+                  detail: 'Demenzkriterien erfüllt, Ursache nicht bestimmbar.\nAusschluss: Senile Demenz mit Delir (F05.1), Senilität nnb (R54)' }
+              ]
+            },
+            {
+              edge: 'Nein',
+              id: 'amnesie',
+              label: 'Isolierte\nAmnesie?',
+              detail: 'Kurz- + Langzeitgedächtnis ↓, Immediatgedächtnis erhalten, kein allg. Abbau, kein Delir',
+              type: 'decision',
+              tags: ['f06','f07'],
+              children: [
+                { edge: 'Ja', id: 'f04', label: 'F04\nOrganisches\namnestisches\nSyndrom', type: 'diagnosis', tags: [], children: [],
+                  detail: 'Kurz- + Langzeitgedächtnis gestört bei erhaltenem Immediatgedächtnis.\nAusschluss: R41.x, F44.0, F1x.6' },
+                {
+                  edge: 'Nein',
+                  id: 'ps_check',
+                  label: 'Persönlichkeits-/\nVerhaltens-\nänderung?',
+                  detail: 'Bei klarem Bewusstsein und ohne ausgeprägte Gedächtnisstörung',
+                  type: 'decision',
+                  tags: ['f06','f07'],
+                  children: [
+                    {
+                      edge: 'Ja',
+                      id: 'f07_typ',
+                      label: 'Art der\nÄnderung?',
+                      type: 'decision',
+                      tags: ['f07'],
+                      children: [
+                        { edge: 'Prämorbid\nverändert\n(> 6 Mo)', id: 'f070', label: 'F07.0\nOrganische\nPersönlichkeits-\nstörung', type: 'diagnosis', tags: ['f07'], children: [],
+                          detail: 'Mind. 3: Zielgerichtetheit↓, Affektänderung, Impulskontrolle↓, kognitive Störung, Sprachänderung, Sexualverhalten' },
+                        { edge: 'Nach\nEnzephalitis', id: 'f071', label: 'F07.1\nPost-\nenzephalitisch', type: 'diagnosis', tags: ['f07'], children: [],
+                          detail: 'Nach viraler/bakterieller Enzephalitis, reversibel (< 24 Mo). Lähmung, Taubheit, Aphasie möglich' },
+                        { edge: 'Nach SHT', id: 'f072', label: 'F07.2\nPsychosyndrom\nnach SHT', type: 'diagnosis', tags: ['f07'], children: [],
+                          detail: 'Nach SHT mit Bewusstlosigkeit (≥ 4 Wo vorher). Kopfschmerzen, Schwindel, Reizbarkeit, Konzentration↓' },
+                        { edge: 'Sonstige', id: 'f078', label: 'F07.8/.9\nSonstige/\nnnb', type: 'diagnosis', tags: ['f07'], children: [],
+                          detail: 'Sonstige oder nnb organische Persönlichkeits- und Verhaltensstörung' }
+                      ]
+                    },
+                    {
+                      edge: 'Nein - andere\npsych. Symptome',
+                      id: 'f06_typ',
+                      label: 'Welches\nSymptombild?',
+                      detail: 'F06: Allg. Kriterien G1-G4 (Nachweis, Zusammenhang, Besserung bei Behandlung, keine andere Ursache)',
+                      type: 'decision',
+                      tags: ['f06'],
+                      children: [
+                        { edge: 'Halluzinationen\n(optisch/akustisch)', id: 'f060', label: 'F06.0\nOrganische\nHalluzinose', type: 'diagnosis', tags: ['f06'], children: [],
+                          detail: 'Ständige/wiederkehrende Halluzinationen bei klarem Bewusstsein. Wahn möglich, aber nicht dominierend' },
+                        { edge: 'Katatonie\n(Stupor/Erregung)', id: 'f061', label: 'F06.1\nOrganische\nKatatonie', type: 'diagnosis', tags: ['f06'], children: [],
+                          detail: 'Stupor, Negativismus, katatone Erregung oder Wechsel. Ausschluss: F44.2, F20.2' },
+                        { edge: 'Wahn\n(anhaltend)', id: 'f062', label: 'F06.2\nOrganische\nwahnhafte Stör.', type: 'diagnosis', tags: ['f06'], children: [],
+                          detail: 'Wahnideen bestimmen Bild (Verfolgung, Eifersucht etc.), klares Bewusstsein. Ausschluss: F22.x, F20.x, F23.x' },
+                        { edge: 'Affekt/Angst/\nDiss./Kogn./\nSonstige', id: 'f06_rest',
+                          label: 'Welche\nStörung?',
+                          type: 'decision',
+                          tags: ['f06'],
+                          children: [
+                            { edge: 'Affektiv\n(F30-F38\nerfüllt)', id: 'f063', label: 'F06.3\nOrganische\naffektive Stör.', type: 'subtype', tags: ['f06'], children: [],
+                              detail: 'Depression/Manie/Bipolar organisch bedingt. Kodierung: F06.30 manisch, F06.31 bipolar, F06.32 depressiv, F06.33 gemischt' },
+                            { edge: 'Angst\n(F41.0/.1\nerfüllt)', id: 'f064', label: 'F06.4\nOrganische\nAngststörung', type: 'subtype', tags: ['f06'], children: [],
+                              detail: 'Generalisierte Angst oder Panik organisch bedingt. Ausschluss: F41.x' },
+                            { edge: 'Dissoziation\n(F44.x\nerfüllt)', id: 'f065', label: 'F06.5\nOrganische\ndissoziative St.', type: 'subtype', tags: ['f06'], children: [],
+                              detail: 'Verlust Integration Erinnerung/Identität/Körperkontrolle. Ausschluss: F44.x' },
+                            { edge: 'Labilität/\nKognitiv/\nSonstige', id: 'f06_last',
+                              label: 'Genauer?',
+                              type: 'decision',
+                              tags: ['f06'],
+                              children: [
+                                { edge: 'Affektlabilität\n+ Schmerzen', id: 'f066', label: 'F06.6\nEmotional\nlabile Stör.', type: 'subtype', tags: ['f06'], children: [],
+                                  detail: 'Affektlabilität + körperliche Missempfindungen (Schwindel, Schmerzen) + Ermüdbarkeit' },
+                                { edge: 'Leichte kogn.\nStörung\n(≥ 2 Wo)', id: 'f067', label: 'F06.7\nLeichte\nkognitive Stör.', type: 'subtype', tags: ['f06'], children: [],
+                                  detail: 'Gedächtnis/Konzentration/Lernen↓, nicht schwer genug für Demenz. Mind. 2 Wochen' },
+                                { edge: 'Sonstige/nnb', id: 'f068', label: 'F06.8/.9\nSonstige/\nnnb', type: 'subtype', tags: ['f06'], children: [],
+                                  detail: 'Z.B. vorübergehende affektive Zustände unter Steroiden, epileptische Psychose, organische sexuelle Funktionsstörung' }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
+const COLORS = {
+  decision:  { fill: '#ebf8ff', stroke: '#4299e1', text: '#2a4365' },
+  diagnosis: { fill: '#f0fff4', stroke: '#48bb78', text: '#276749' },
+  exclude:   { fill: '#fff5f5', stroke: '#fc8181', text: '#9b2c2c' },
+  subtype:   { fill: '#faf5ff', stroke: '#9f7aea', text: '#553c9a' },
+  link:      { fill: '#fffff0', stroke: '#ecc94b', text: '#744210' }
+};
+
+const NODE_W = 140, NODE_H = 72, H_GAP = 32, V_GAP = 90;
+
+function countLeaves(node) {
+  if (!node.children || node.children.length === 0) return 1;
+  return node.children.reduce((s, c) => s + countLeaves(c), 0);
+}
+
+function layoutTree(node, depth, xStart) {
+  const leaves = countLeaves(node);
+  const totalW = leaves * (NODE_W + H_GAP) - H_GAP;
+  node._x = xStart + totalW / 2;
+  node._y = depth * (NODE_H + V_GAP) + 40;
+  node._w = NODE_W;
+  node._h = NODE_H;
+
+  if (node.children && node.children.length > 0) {
+    let cx = xStart;
+    for (const child of node.children) {
+      const cl = countLeaves(child);
+      const cw = cl * (NODE_W + H_GAP) - H_GAP;
+      layoutTree(child, depth + 1, cx);
+      cx += cw + H_GAP;
+    }
+  }
+}
+
+function collectNodes(node, list) {
+  list.push(node);
+  if (node.children) node.children.forEach(c => collectNodes(c, list));
+  return list;
+}
+
+function collectEdges(node, list) {
+  if (node.children) {
+    for (const c of node.children) {
+      list.push({ from: node, to: c, label: c.edge || '' });
+      collectEdges(c, list);
+    }
+  }
+  return list;
+}
+
+function wrapText(text, maxChars) {
+  return text.split('\n');
+}
+
+let currentScale = 1;
+const tooltip = document.getElementById('tooltip');
+
+function buildSVG() {
+  layoutTree(TREE, 0, 40);
+  const allNodes = collectNodes(TREE, []);
+  const allEdges = collectEdges(TREE, []);
+
+  let maxX = 0, maxY = 0;
+  for (const n of allNodes) {
+    maxX = Math.max(maxX, n._x + n._w / 2 + 60);
+    maxY = Math.max(maxY, n._y + n._h + 60);
+  }
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${maxX}" height="${maxY}" viewBox="0 0 ${maxX} ${maxY}">`;
+
+  // marker
+  svg += `<defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#718096"/>
+    </marker>
+  </defs>`;
+
+  // edges
+  for (const e of allEdges) {
+    const x1 = e.from._x, y1 = e.from._y + e.from._h;
+    const x2 = e.to._x, y2 = e.to._y;
+    const midY = (y1 + y2) / 2;
+
+    const edgeTags = e.to.tags || [];
+    const tagAttr = edgeTags.length ? ` data-tags="${edgeTags.join(',')}"` : '';
+
+    svg += `<g class="edge"${tagAttr}>`;
+    svg += `<path d="M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}" marker-end="url(#arrowhead)"/>`;
+
+    if (e.label) {
+      const lx = (x1 + x2) / 2;
+      const ly = midY - 2;
+      const lines = e.label.split('\n');
+      const lineH = 13;
+      const startY = ly - ((lines.length - 1) * lineH) / 2;
+
+      // background
+      const maxLen = Math.max(...lines.map(l => l.length));
+      const bgW = maxLen * 6.5 + 10;
+      const bgH = lines.length * lineH + 6;
+      svg += `<rect x="${lx - bgW/2}" y="${startY - lineH + 2}" width="${bgW}" height="${bgH}" rx="4" fill="white" fill-opacity="0.9" stroke="none"/>`;
+
+      for (let i = 0; i < lines.length; i++) {
+        svg += `<text class="edge-label"${tagAttr} x="${lx}" y="${startY + i * lineH}" text-anchor="middle">${escHtml(lines[i])}</text>`;
+      }
+    }
+    svg += '</g>';
+  }
+
+  // nodes
+  for (const n of allNodes) {
+    const c = COLORS[n.type] || COLORS.decision;
+    const x = n._x - n._w / 2;
+    const tagAttr = (n.tags && n.tags.length) ? ` data-tags="${n.tags.join(',')}"` : '';
+
+    svg += `<g class="node" data-id="${n.id}"${tagAttr}>`;
+    if (n.type === 'diagnosis' || n.type === 'subtype' || n.type === 'exclude') {
+      svg += `<rect x="${x}" y="${n._y}" width="${n._w}" height="${n._h}" rx="10" fill="${c.fill}" stroke="${c.stroke}"/>`;
+    } else {
+      svg += `<rect x="${x}" y="${n._y}" width="${n._w}" height="${n._h}" rx="6" fill="${c.fill}" stroke="${c.stroke}"/>`;
+    }
+
+    const lines = wrapText(n.label, 16);
+    const lineH = 14;
+    const totalH = lines.length * lineH;
+    const startY = n._y + (n._h - totalH) / 2 + lineH - 2;
+
+    for (let i = 0; i < lines.length; i++) {
+      const isBold = lines[i].match(/^F\d/);
+      svg += `<text x="${n._x}" y="${startY + i * lineH}" text-anchor="middle" fill="${c.text}" font-size="${isBold ? 13 : 11.5}" font-weight="${isBold ? 700 : 400}">${escHtml(lines[i])}</text>`;
+    }
+
+    svg += '</g>';
+  }
+
+  svg += '</svg>';
+  document.getElementById('svgContainer').innerHTML = svg;
+
+  // tooltip events
+  document.querySelectorAll('.node').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      const id = el.dataset.id;
+      const node = allNodes.find(n => n.id === id);
+      if (node && node.detail) {
+        tooltip.textContent = node.detail;
+        tooltip.style.display = 'block';
+      }
+    });
+    el.addEventListener('mousemove', e => {
+      tooltip.style.left = (e.clientX + 15) + 'px';
+      tooltip.style.top = (e.clientY + 15) + 'px';
+    });
+    el.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlightPath(tag) {
+  const svg = document.querySelector('svg');
+  svg.classList.add('highlight');
+
+  document.querySelectorAll('.node').forEach(el => {
+    const tags = (el.dataset.tags || '').split(',');
+    el.classList.toggle('hl', tags.includes(tag));
+  });
+  document.querySelectorAll('.edge').forEach(el => {
+    const tags = (el.dataset.tags || '').split(',');
+    el.classList.toggle('hl', tags.includes(tag));
+  });
+  document.querySelectorAll('.edge-label').forEach(el => {
+    const tags = (el.dataset.tags || '').split(',');
+    el.classList.toggle('hl', tags.includes(tag));
+  });
+}
+
+function resetView() {
+  const svg = document.querySelector('svg');
+  svg.classList.remove('highlight');
+  document.querySelectorAll('.hl').forEach(el => el.classList.remove('hl'));
+}
+
+function zoomIn() {
+  currentScale = Math.min(currentScale + 0.15, 2.5);
+  document.getElementById('svgContainer').style.transform = `scale(${currentScale})`;
+  document.getElementById('svgContainer').style.transformOrigin = 'top left';
+}
+
+function zoomOut() {
+  currentScale = Math.max(currentScale - 0.15, 0.3);
+  document.getElementById('svgContainer').style.transform = `scale(${currentScale})`;
+  document.getElementById('svgContainer').style.transformOrigin = 'top left';
+}
+
+buildSVG();
+</script>
+</body>
+</html>
