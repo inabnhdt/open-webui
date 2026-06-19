@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICD-10 F0 Entscheidungsbaum</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f0f4f8;
+    color: #1a202c;
+    min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #2b6cb0, #4c51bf);
+    color: white;
+    padding: 2rem;
+    text-align: center;
+  }
+  .header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+  .header p { opacity: 0.9; font-size: 1rem; }
+  .container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    animation: fadeIn 0.4s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .question {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 1.2rem;
+    line-height: 1.5;
+    color: #2d3748;
+  }
+  .btn-group { display: flex; flex-direction: column; gap: 0.7rem; }
+  .btn {
+    padding: 0.9rem 1.2rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f7fafc;
+    cursor: pointer;
+    font-size: 0.95rem;
+    text-align: left;
+    transition: all 0.2s;
+    line-height: 1.4;
+  }
+  .btn:hover {
+    border-color: #4299e1;
+    background: #ebf8ff;
+    transform: translateX(4px);
+  }
+  .diagnosis-card {
+    border-left: 5px solid #48bb78;
+    background: #f0fff4;
+  }
+  .diagnosis-card h2 {
+    color: #276749;
+    font-size: 1.3rem;
+    margin-bottom: 0.8rem;
+  }
+  .diagnosis-card .code {
+    display: inline-block;
+    background: #48bb78;
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+  }
+  .diagnosis-card ul {
+    margin: 0.8rem 0 0.8rem 1.5rem;
+    line-height: 1.7;
+  }
+  .diagnosis-card .subtype {
+    background: #e6fffa;
+    border: 1px solid #b2f5ea;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-top: 0.8rem;
+    font-size: 0.9rem;
+  }
+  .diagnosis-card .subtype strong { color: #285e61; }
+  .exclusion {
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-top: 0.8rem;
+    font-size: 0.9rem;
+    color: #9b2c2c;
+  }
+  .restart-btn {
+    display: inline-block;
+    margin-top: 1.2rem;
+    padding: 0.7rem 1.5rem;
+    background: #4299e1;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background 0.2s;
+  }
+  .restart-btn:hover { background: #3182ce; }
+  .breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: #718096;
+  }
+  .breadcrumb span::after { content: ' \2192 '; }
+  .breadcrumb span:last-child::after { content: ''; }
+  .info-box {
+    background: #ebf8ff;
+    border: 1px solid #bee3f8;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #2a4365;
+    line-height: 1.6;
+  }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ICD-10 F0: Entscheidungsbaum</h1>
+  <p>Organische, einschließlich symptomatischer psychischer Störungen</p>
+</div>
+
+<div class="container" id="app"></div>
+
+<script>
+const nodes = {
+  start: {
+    question: "Liegt ein objektiver Nachweis oder eine Anamnese einer zerebralen oder systemischen Erkrankung vor, die psychische Symptome verursachen kann?",
+    info: "Grundvoraussetzung für alle F0-Diagnosen: Es muss eine organische Ursache nachweisbar oder anamnestisch belegt sein.",
+    options: [
+      { text: "Ja - organische Ursache nachgewiesen/vermutet", next: "bewusstsein" },
+      { text: "Nein - keine organische Ursache erkennbar", next: "no_f0" }
+    ]
+  },
+  no_f0: {
+    diagnosis: true,
+    code: "Kein F0",
+    title: "Keine Diagnose aus dem F0-Bereich",
+    description: "Ohne Nachweis einer organischen Ursache kann keine F0-Diagnose vergeben werden. Prüfen Sie andere Kapitel des ICD-10 (z.B. F1-F9)."
+  },
+  bewusstsein: {
+    question: "Liegt eine Bewusstseinsstörung (Bewusstseinseintrübung) vor?",
+    info: "Verminderte Klarheit der Umgebungswahrnehmung, reduzierte Fähigkeit, Aufmerksamkeit aufrechtzuerhalten, zu fokussieren oder umzustellen.",
+    options: [
+      { text: "Ja - Bewusstseinstrübung vorhanden", next: "delir_check" },
+      { text: "Nein - Bewusstsein klar", next: "demenz_check" }
+    ]
+  },
+  delir_check: {
+    question: "Sind die Delir-Kriterien erfüllt? (Akuter Beginn, kognitive Störung mit Immediatgedächtnis-/Kurzzeitgedächtnisstörung, Desorientiertheit, psychomotorische Störung, Schlafstörung)",
+    info: "Delir = ätiologisch unspezifisches hirnorganisches Syndrom mit Störung des Bewusstseins, der Aufmerksamkeit, Wahrnehmung, des Denkens, Gedächtnisses, der Psychomotorik, Emotionalität und des Schlaf-Wach-Rhythmus.",
+    options: [
+      { text: "Ja - Delir-Kriterien erfüllt", next: "delir_demenz" },
+      { text: "Nein - Kriterien nicht vollständig erfüllt", next: "demenz_check" }
+    ]
+  },
+  delir_demenz: {
+    question: "Liegt gleichzeitig eine vorbestehende Demenz (F00-F03) vor?",
+    options: [
+      { text: "Nein - kein Hinweis auf Demenz", next: "f050" },
+      { text: "Ja - Delir entwickelt sich im Verlauf einer Demenz", next: "f051" },
+      { text: "Sonstige Form / nicht näher bezeichnbar", next: "f058_9" }
+    ]
+  },
+  f050: {
+    diagnosis: true,
+    code: "F05.0",
+    title: "Delir ohne Demenz",
+    description: "Akut aufgetretenes hirnorganisches Syndrom mit Bewusstseinstrübung, kognitiver Störung, psychomotorischer Störung und Schlafstörung ohne vorbestehende Demenz.",
+    criteria: [
+      "Bewusstseinsstörung mit reduzierter Aufmerksamkeit",
+      "Störung von Immediatgedächtnis und Kurzzeitgedächtnis",
+      "Desorientiertheit (Zeit, Ort, Person)",
+      "Mind. 1 psychomotorische Störung",
+      "Schlafstörung / Schlaf-Wach-Rhythmusstörung",
+      "Plötzlicher Beginn, wechselnde Symptomausprägung",
+      "Objektiver Nachweis einer zugrundeliegenden Erkrankung"
+    ],
+    exclusion: "Ausschluss: Durch Alkohol/psychotrope Substanzen bedingtes Delir (F1x.4)"
+  },
+  f051: {
+    diagnosis: true,
+    code: "F05.1",
+    title: "Delir bei Demenz",
+    description: "Delir-Symptome entwickeln sich im Verlauf einer vorbestehenden Demenz.",
+    criteria: [
+      "Delir-Kriterien vollständig erfüllt",
+      "Vorbestehende Demenz (F00-F03) diagnostiziert",
+      "Delir-Symptomatik tritt im Verlauf der Demenz auf"
+    ]
+  },
+  f058_9: {
+    diagnosis: true,
+    code: "F05.8 / F05.9",
+    title: "Sonstiges Delir / Delir, nicht näher bezeichnet",
+    description: "F05.8: Sonstige Formen des Delirs (z.B. gemischte Ätiologie). F05.9: Delir, nicht näher bezeichnet."
+  },
+  demenz_check: {
+    question: "Liegt ein fortschreitender kognitiver Abbau vor? (Gedächtnisverlust + Abnahme anderer kognitiver Fähigkeiten, mind. 6 Monate, bei klarem Bewusstsein)",
+    info: "Demenz-Kriterien (G1-G4): G1: Gedächtnisabnahme + Abnahme anderer kognitiver Fähigkeiten. G2: Klares Bewusstsein. G3: Affekt-/Antriebsstörung oder Sozialverhaltensänderung. G4: Dauer mind. 6 Monate.",
+    options: [
+      { text: "Ja - Demenzkriterien (G1-G4) erfüllt", next: "demenz_ursache" },
+      { text: "Nein - keine Demenz, aber andere kognitive/psychische Symptome", next: "amnesie_check" }
+    ]
+  },
+  demenz_ursache: {
+    question: "Was ist die wahrscheinlichste Ursache der Demenz?",
+    options: [
+      { text: "Primär degenerativ (Alzheimer) - schleichender Beginn, stetige Verschlechterung, keine andere Ursache", next: "alzheimer_onset" },
+      { text: "Vaskulär - Zusammenhang mit zerebrovaskulärer Erkrankung, ungleiche kognitive Defizite, fokale Zeichen", next: "vaskular_typ" },
+      { text: "Andere klassifizierte Krankheit (z.B. Parkinson, HIV, Creutzfeldt-Jakob, Huntington)", next: "f02" },
+      { text: "Ursache nicht bestimmbar", next: "f03" }
+    ]
+  },
+  alzheimer_onset: {
+    question: "Wann begann die Erkrankung?",
+    info: "Bei Alzheimer-Demenz ist das Erkrankungsalter entscheidend für die Subklassifikation.",
+    options: [
+      { text: "Vor dem 65. Lebensjahr (früher Beginn) - rasche Verschlechterung, deutliche kortikale Störungen", next: "f000" },
+      { text: "Nach dem 65. Lebensjahr (später Beginn) - langsame Progredienz, Gedächtnisstörung dominiert", next: "f001" },
+      { text: "Atypische oder gemischte Form", next: "f002" },
+      { text: "Nicht näher bezeichnbar", next: "f009" }
+    ]
+  },
+  f000: {
+    diagnosis: true,
+    code: "F00.0",
+    title: "Demenz bei Alzheimer-Krankheit mit frühem Beginn",
+    description: "Beginn vor dem 65. Lebensjahr, rasche Verschlechterung mit deutlichen und vielfältigen kortikalen Störungen.",
+    criteria: [
+      "Allgemeine Demenzkriterien (G1-G4) erfüllt",
+      "Kein Hinweis auf andere Ursache der Demenz",
+      "Beginn vor dem 65. Lebensjahr",
+      "Mind. 1: Relativ plötzlicher Beginn mit rascher Progredienz ODER Hinweis auf temporale/frontale/parietale Beteiligung (Aphasie, Agraphie, Alexie, Akalkulie, Apraxie)"
+    ],
+    subtypes: ["5. Stelle: Zusätzliche Symptome (wahnhaft, halluzinatorisch, depressiv, gemischt)", "6. Stelle: Schweregrad (.xx0 leicht, .xx1 mittelgradig, .xx2 schwer)"]
+  },
+  f001: {
+    diagnosis: true,
+    code: "F00.1",
+    title: "Demenz bei Alzheimer-Krankheit mit spätem Beginn",
+    description: "Beginn nach dem 65. Lebensjahr, langsame Progredienz, Gedächtnisstörungen als Hauptmerkmal.",
+    criteria: [
+      "Allgemeine Demenzkriterien (G1-G4) erfüllt",
+      "Kein Hinweis auf andere Ursache der Demenz",
+      "Beginn nach dem 65. Lebensjahr",
+      "Mind. 1: Langsamer Beginn mit allmählicher Progredienz ODER Vorherrschen der Gedächtnisstörung gegenüber kognitiver Beeinträchtigung"
+    ],
+    subtypes: ["5. Stelle: Zusätzliche Symptome", "6. Stelle: Schweregrad"]
+  },
+  f002: {
+    diagnosis: true,
+    code: "F00.2",
+    title: "Demenz bei Alzheimer-Krankheit, atypische oder gemischte Form",
+    description: "Alzheimer-Demenz, die nicht eindeutig den Kriterien für frühen oder späten Beginn entspricht, oder gemischte Form."
+  },
+  f009: {
+    diagnosis: true,
+    code: "F00.9",
+    title: "Demenz bei Alzheimer-Krankheit, nicht näher bezeichnet",
+    description: "Alzheimer-Demenz ohne weitere Spezifikation."
+  },
+  vaskular_typ: {
+    question: "Welcher Verlaufstyp liegt vor?",
+    info: "Vaskuläre Demenz erfordert: Demenzkriterien + ungleiche kognitive Defizite + fokale Hirnschädigung + Nachweis zerebrovaskulärer Erkrankung.",
+    options: [
+      { text: "Akuter Beginn - Entwicklung innerhalb eines Monats nach Schlaganfällen", next: "f010" },
+      { text: "Allmählicher Beginn - Entwicklung über 3-6 Monate nach mehreren TIAs", next: "f011" },
+      { text: "Subkortikal - Hypertonie, ischämische Herde im Marklager, Hirnrinde intakt (Binswanger)", next: "f012" },
+      { text: "Gemischt kortikal/subkortikal, sonstige oder nnb", next: "f013_9" }
+    ]
+  },
+  f010: {
+    diagnosis: true,
+    code: "F01.0",
+    title: "Vaskuläre Demenz mit akutem Beginn",
+    description: "Schnelle Entwicklung der Demenz innerhalb eines Monats (< 3 Monate) nach einer Reihe von Schlaganfällen.",
+    criteria: [
+      "Allgemeine Demenzkriterien erfüllt",
+      "Ungleiche Verteilung kognitiver Defizite",
+      "Fokale Hirnschädigung nachweisbar",
+      "Zerebrovaskuläre Erkrankung belegt",
+      "Demenzentwicklung innerhalb von 1 Monat nach Schlaganfällen"
+    ]
+  },
+  f011: {
+    diagnosis: true,
+    code: "F01.1",
+    title: "Multi-Infarkt-Demenz",
+    description: "Allmählicher Beginn der Demenz über 3-6 Monate nach mehreren transitorischen ischämischen Attacken (TIAs).",
+    criteria: [
+      "Allgemeine Demenzkriterien erfüllt",
+      "Ungleiche Verteilung kognitiver Defizite",
+      "Fokale Hirnschädigung nachweisbar",
+      "Allmähliche Demenzentwicklung (3-6 Monate) nach mehreren TIAs"
+    ]
+  },
+  f012: {
+    diagnosis: true,
+    code: "F01.2",
+    title: "Subkortikale vaskuläre Demenz",
+    description: "Klinisches Bild erinnert an Alzheimer-Demenz, verursacht durch Hypertonie und ischämische Herde im Marklager bei intakter Hirnrinde (Binswanger-Erkrankung).",
+    criteria: [
+      "Allgemeine Demenzkriterien erfüllt",
+      "Arterieller Hypertonus (Bluthochdruck)",
+      "Vaskuläre Erkrankung im Marklager der Hemisphären nachgewiesen",
+      "Keine Schädigung der Hirnrinde"
+    ]
+  },
+  f013_9: {
+    diagnosis: true,
+    code: "F01.3 / F01.8 / F01.9",
+    title: "Gemischte / Sonstige / Nicht näher bezeichnete vaskuläre Demenz",
+    description: "F01.3: Gemischte kortikale und subkortikale vaskuläre Demenz. F01.8: Sonstige vaskuläre Demenz. F01.9: Vaskuläre Demenz, nnb."
+  },
+  f02: {
+    diagnosis: true,
+    code: "F02*",
+    title: "Demenz bei andernorts klassifizierten Krankheiten",
+    description: "Demenz als Folge einer anderen spezifischen Grunderkrankung (z.B. Morbus Pick, Creutzfeldt-Jakob, Morbus Huntington, Morbus Parkinson, HIV-Erkrankung).",
+    criteria: [
+      "Allgemeine Demenzkriterien (G1-G4) erfüllt",
+      "Grunderkrankung andernorts klassifiziert und nachgewiesen"
+    ]
+  },
+  f03: {
+    diagnosis: true,
+    code: "F03",
+    title: "Nicht näher bezeichnete Demenz",
+    description: "Demenzkriterien sind erfüllt, die Ursache kann jedoch nicht bestimmt werden.",
+    exclusion: "Ausschluss: Senile Demenz mit Delir (F05.1), Senilität nnb (R54)"
+  },
+  amnesie_check: {
+    question: "Liegt eine isolierte Gedächtnisstörung vor? (Kurz- und Langzeitgedächtnis beeinträchtigt, Immediatgedächtnis erhalten, kein allgemeiner intellektueller Abbau, kein Delir)",
+    info: "Organisches amnestisches Syndrom: Deutliche Beeinträchtigung von Kurz- UND Langzeitgedächtnis bei erhaltenem Immediatgedächtnis, OHNE Bewusstseinseintrübung und OHNE allgemeinen kognitiven Abbau.",
+    options: [
+      { text: "Ja - isolierte Amnesie ohne Demenz und ohne Delir", next: "f04" },
+      { text: "Nein - keine isolierte Amnesie", next: "persoenlichkeit_check" }
+    ]
+  },
+  f04: {
+    diagnosis: true,
+    code: "F04",
+    title: "Organisches amnestisches Syndrom",
+    description: "Deutliche Beeinträchtigung des Kurz- und Langzeitgedächtnisses bei erhaltenem Immediatgedächtnis, nicht durch Alkohol oder psychotrope Substanzen bedingt.",
+    criteria: [
+      "Störung des Kurzzeitgedächtnisses (beeinträchtigtes Lernen neuen Materials)",
+      "Verminderte Fähigkeit, sich an vergangene Erlebnisse zu erinnern",
+      "Immediatgedächtnis erhalten (z.B. Zahlennachsprechen)",
+      "Keine Bewusstseinstrübung (kein Delir)",
+      "Kein allgemeiner intellektueller Abbau (keine Demenz)",
+      "Nachweis einer Hirnerkrankung (bes. bilateral dienzephal / mediotemporal)"
+    ],
+    exclusion: "Ausschluss: Amnesien (R41.x), Dissoziative Amnesie (F44.0), Alkohol-/substanzbedingtes Korsakow-Syndrom (F1x.6)"
+  },
+  persoenlichkeit_check: {
+    question: "Steht eine Persönlichkeits- oder Verhaltensänderung im Vordergrund? (Bei klarem Bewusstsein und ohne ausgeprägte Gedächtnisstörung)",
+    info: "F07: Veränderung der Persönlichkeit oder des Verhaltens als Rest- oder Begleiterscheinung einer zerebralen Erkrankung.",
+    options: [
+      { text: "Ja - Persönlichkeits-/Verhaltensänderung im Vordergrund", next: "f07_typ" },
+      { text: "Nein - andere psychische Symptome (Halluzinationen, Wahn, Affekt, Angst, Dissoziation, kognitive Störung)", next: "f06_typ" }
+    ]
+  },
+  f07_typ: {
+    question: "Welche Art der Persönlichkeits-/Verhaltensänderung liegt vor?",
+    options: [
+      { text: "Auffällige Veränderung des prämorbiden Verhaltensmusters (Affekte, Impulse, Bedürfnisse) - mind. 3 Symptome > 6 Monate", next: "f070" },
+      { text: "Verhaltensänderung nach viraler/bakterieller Enzephalitis (reversibel)", next: "f071" },
+      { text: "Symptome nach Schädel-Hirn-Trauma (Kopfschmerzen, Schwindel, Reizbarkeit, Konzentrationsstörung)", next: "f072" },
+      { text: "Sonstige / nicht näher bezeichnbar", next: "f078_9" }
+    ]
+  },
+  f070: {
+    diagnosis: true,
+    code: "F07.0",
+    title: "Organische Persönlichkeitsstörung",
+    description: "Auffällige Veränderung des gewohnten prämorbiden Verhaltensmusters hinsichtlich Affekten, Bedürfnissen und Impulsen.",
+    criteria: [
+      "Objektiver Nachweis einer zerebralen Erkrankung",
+      "Kein Delir, keine ausgeprägte Gedächtnisstörung",
+      "Mind. 3 der folgenden Symptome > 6 Monate:",
+      "- Reduzierte Fähigkeit zu zielgerichteten Aktivitäten",
+      "- Affektive Änderung (Labilität, Euphorie, Reizbarkeit, Apathie)",
+      "- Unangenehme Äußerung von Bedürfnissen ohne Rücksicht auf Konsequenzen",
+      "- Kognitive Störungen (Misstrauen, paranoide Ideen, exzessive Themenbeschäftigung)",
+      "- Veränderung der Sprachproduktion/des Redeflusses",
+      "- Verändertes Sexualverhalten"
+    ],
+    exclusion: "Ausschluss: F60.x, F61.0, F62.0/.1, F07.1, F07.2"
+  },
+  f071: {
+    diagnosis: true,
+    code: "F07.1",
+    title: "Postenzephalitisches Syndrom",
+    description: "Verhaltensänderung nach viraler oder bakterieller Enzephalitis. Reversibel, selten länger als 24 Monate.",
+    criteria: [
+      "Allgemeine Kriterien F07 erfüllt",
+      "Mind. 1: Lähmung, Taubheit, Aphasie, konstruktive Apraxie, Akalkulie",
+      "Syndrom ist reversibel (selten > 24 Monate)"
+    ]
+  },
+  f072: {
+    diagnosis: true,
+    code: "F07.2",
+    title: "Organisches Psychosyndrom nach Schädel-Hirn-Trauma",
+    description: "Verschiedene Symptome (Kopfschmerzen, Schwindel, Erschöpfung, Reizbarkeit, Konzentrationsstörung) nach SHT mit Bewusstlosigkeit.",
+    criteria: [
+      "Allgemeine Kriterien F07 erfüllt",
+      "SHT mit Bewusstlosigkeit mind. 4 Wochen vor Symptombeginn",
+      "Mind. 3: Kopfschmerzen/Schwindel/Erschöpfung, affektive Veränderungen, Konzentrations-/Gedächtnisbeschwerden, Schlafstörungen, verminderte Alkoholtoleranz, hypochondrische Beschäftigung"
+    ]
+  },
+  f078_9: {
+    diagnosis: true,
+    code: "F07.8 / F07.9",
+    title: "Sonstige / Nicht näher bezeichnete organische Persönlichkeits- und Verhaltensstörung",
+    description: "Organische Persönlichkeits- und Verhaltensstörung, die keiner spezifischen Unterkategorie zugeordnet werden kann."
+  },
+  f06_typ: {
+    question: "Welches psychische Symptombild steht im Vordergrund?",
+    info: "F06: Verschiedene psychische Störungen aufgrund einer Hirnschädigung oder körperlichen Krankheit. Allgemeine Kriterien: G1 (Nachweis organische Ursache), G2 (zeitlicher Zusammenhang), G3 (Besserung bei Ursachenbehandlung), G4 (keine andere Verursachung).",
+    options: [
+      { text: "Halluzinationen (v.a. optisch/akustisch) bei klarem Bewusstsein", next: "f060" },
+      { text: "Katatone Symptome (Stupor, Negativismus, Erregung)", next: "f061" },
+      { text: "Wahnideen (anhaltend oder wiederkehrend)", next: "f062" },
+      { text: "Weitere Symptome (Affekt, Angst, Dissoziation, Labilität, leichte kognitive Störung)", next: "f06_weitere" }
+    ]
+  },
+  f06_weitere: {
+    question: "Welches Symptombild liegt genauer vor?",
+    options: [
+      { text: "Affektive Störung (Depression, Manie) - Kriterien einer F30-F38 erfüllt", next: "f063" },
+      { text: "Angststörung (generalisiert oder Panik) - Kriterien einer F41.0/F41.1 erfüllt", next: "f064" },
+      { text: "Dissoziative Störung - Kriterien einer F44.x erfüllt", next: "f065" },
+      { text: "Emotional labile Störung (Affektlabilität, Ermüdbarkeit, Schmerzen) / Leichte kognitive Störung / Sonstige", next: "f066_7_8" }
+    ]
+  },
+  f060: {
+    diagnosis: true,
+    code: "F06.0",
+    title: "Organische Halluzinose",
+    description: "Ständige oder wiederkehrende Halluzinationen (meist optisch oder akustisch) bei klarer Bewusstseinslage. Wahn kann vorkommen, dominiert aber nicht das klinische Bild.",
+    criteria: [
+      "Allgemeine Kriterien F06 (G1-G4) erfüllt",
+      "Ständige oder wiederkehrende Halluzinationen (v.a. optisch/akustisch)",
+      "Klare Bewusstseinslage",
+      "Krankheitseinsicht kann erhalten sein"
+    ]
+  },
+  f061: {
+    diagnosis: true,
+    code: "F06.1",
+    title: "Organische katatone Störung",
+    description: "Verminderte oder gesteigerte psychomotorische Aktivität mit katatonen Symptomen bei organischer Ursache.",
+    criteria: [
+      "Allgemeine Kriterien F06 (G1-G4) erfüllt",
+      "Mind. 1: Stupor, Negativismus/rigide Haltungsstereotypien, katatone Erregung, rascher Wechsel Stupor/Erregung"
+    ],
+    exclusion: "Ausschluss: Dissoziativer Stupor (F44.2), Katatone Schizophrenie (F20.2)"
+  },
+  f062: {
+    diagnosis: true,
+    code: "F06.2",
+    title: "Organische wahnhafte (schizophreniforme) Störung",
+    description: "Anhaltende oder wiederkehrende Wahnideen, ggf. mit Halluzinationen. Klares Bewusstsein und intaktes Gedächtnis.",
+    criteria: [
+      "Allgemeine Kriterien F06 (G1-G4) erfüllt",
+      "Klinisches Bild durch Wahnideen bestimmt (Verfolgung, körperliche Veränderung, Eifersucht etc.)",
+      "Bewusstsein klar, Gedächtnis intakt"
+    ],
+    exclusion: "Ausschluss: Anhaltende wahnhafte Störungen (F22.x), substanzinduziert (F1x.5), Schizophrenie (F20.x), akute psychotische Störung (F23.x)"
+  },
+  f063: {
+    diagnosis: true,
+    code: "F06.3",
+    title: "Organische affektive Störung",
+    description: "Veränderung der Stimmung oder des Affektes zusammen mit Aktivitätsänderung, die die Kriterien einer affektiven Störung (F30-F38) erfüllt, jedoch als Folge einer organischen Störung.",
+    criteria: [
+      "Allgemeine Kriterien F06 (G1-G4) erfüllt",
+      "Kriterien einer F30-F38 erfüllt"
+    ],
+    subtypes: ["F06.30: Organische manische Störung", "F06.31: Organische bipolare Störung", "F06.32: Organische depressive Störung", "F06.33: Organische gemischte affektive Störung"],
+    exclusion: "Ausschluss: Nicht organisch bedingte affektive Störungen (F30-F39)"
+  },
+  f064: {
+    diagnosis: true,
+    code: "F06.4",
+    title: "Organische Angststörung",
+    description: "Generalisierte Angst oder Panikstörung als Folge einer organischen Störung.",
+    criteria: [
+      "Allgemeine Kriterien F06 (G1-G4) erfüllt",
+      "Kriterien einer F41.0 (Panikstörung) oder F41.1 (Generalisierte Angststörung) erfüllt"
+    ],
+    exclusion: "Ausschluss: Nicht organisch bedingte Angststörung (F41.x)"
+  },
+  f065: {
+    diagnosis: true,
+    code: "F06.5",
+    title: "Organische dissoziative Störung",
+    description: "Verlust der normalen Integration von Erinnerungen, Identitätsbewusstsein und Körperkontrolle als Folge einer organischen Störung.",
+    criteria: [
+      "Allgemeine Kriterien F06 (G1-G4) erfüllt",
+      "Kriterien einer F44.0-F44.8 erfüllt"
+    ],
+    exclusion: "Ausschluss: Nicht organisch bedingte dissoziative Störung (F44.x)"
+  },
+  f066_7_8: {
+    question: "Welche Symptomatik liegt genauer vor?",
+    options: [
+      { text: "Affektlabilität + körperliche Missempfindungen (Schwindel, Schmerzen) + Ermüdbarkeit", next: "f066" },
+      { text: "Leichte kognitive Störung (Gedächtnis, Konzentration, Lernen) - nicht schwer genug für Demenz/Delir, mind. 2 Wochen", next: "f067" },
+      { text: "Sonstige (z.B. vorübergehende affektive Zustände unter Medikation) / Nicht näher bezeichnbar", next: "f068_9" }
+    ]
+  },
+  f066: {
+    diagnosis: true,
+    code: "F06.6",
+    title: "Organische emotional labile (asthenische) Störung",
+    description: "Affektdurchlässigkeit oder -labilität, Ermüdbarkeit sowie körperliche Missempfindungen und Schmerzen als Folge einer organischen Störung.",
+    criteria: [
+      "Allgemeine Kriterien F06 (G1-G4) erfüllt",
+      "Affektlabilität (unkontrollierter, wechselnder Ausdruck von Emotionen)",
+      "Verschiedene unangenehme körperliche Empfindungen (Schwindel, Schmerzen)"
+    ],
+    exclusion: "Ausschluss: Nicht organisch bedingte somatoforme Störung (F45.x)"
+  },
+  f067: {
+    diagnosis: true,
+    code: "F06.7",
+    title: "Leichte kognitive Störung",
+    description: "Gedächtnisstörung, Lernschwierigkeiten und verminderte Konzentrationsfähigkeit mit Ermüdung. Nicht schwer genug für Demenz oder Delir.",
+    criteria: [
+      "Allgemeine Kriterien F06 (G1-G4) erfüllt",
+      "Störung kognitiver Funktionen > 2 Wochen, mind. 1 Gebiet betroffen:",
+      "- Gedächtnis/Lernen, Aufmerksamkeit/Konzentration, Denken, Sprache, visuell-räumliche Funktion",
+      "Abweichungen in neuropsychologischen Tests nachweisbar",
+      "Nicht schwer genug für F00-F05 oder F07.1/.2"
+    ]
+  },
+  f068_9: {
+    diagnosis: true,
+    code: "F06.8 / F06.9",
+    title: "Sonstige / Nicht näher bezeichnete psychische Störung aufgrund organischer Ursache",
+    description: "F06.8: Näher bezeichnete sonstige Störungen (z.B. vorübergehende affektive Zustandsbilder unter Steroidtherapie, epileptische Psychose, organische sexuelle Funktionsstörung). F06.9: Nicht näher bezeichnet."
+  },
+  f09: {
+    diagnosis: true,
+    code: "F09",
+    title: "Nicht näher bezeichnete organische oder symptomatische psychische Störung",
+    description: "Z.B. nicht näher bezeichnete organische Psychose.",
+    exclusion: "Ausschluss: Nicht näher bezeichnete Psychose (F29)"
+  }
+};
+
+let history = [];
+
+function render(nodeId) {
+  const node = nodes[nodeId];
+  const app = document.getElementById('app');
+  history.push(nodeId);
+
+  if (node.diagnosis) {
+    renderDiagnosis(node, app);
+  } else {
+    renderQuestion(node, nodeId, app);
+  }
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+}
+
+function renderBreadcrumb() {
+  if (history.length <= 1) return '';
+  const labels = {
+    start: 'Start', bewusstsein: 'Bewusstsein', delir_check: 'Delir',
+    demenz_check: 'Demenz', demenz_ursache: 'Ursache', alzheimer_onset: 'Beginn',
+    vaskular_typ: 'Vaskulär', amnesie_check: 'Amnesie', persoenlichkeit_check: 'Persönlichkeit',
+    f06_typ: 'F06', f06_weitere: 'F06 Detail', f066_7_8: 'F06.6-8',
+    delir_demenz: 'Delir+Demenz', f07_typ: 'F07'
+  };
+  return '<div class="breadcrumb">' +
+    history.filter(h => !nodes[h].diagnosis).map(h => `<span>${labels[h] || h}</span>`).join('') +
+    '</div>';
+}
+
+function renderQuestion(node, nodeId, app) {
+  let html = '<div class="card">';
+  html += renderBreadcrumb();
+  if (node.info) html += `<div class="info-box">${node.info}</div>`;
+  html += `<div class="question">${node.question}</div>`;
+  html += '<div class="btn-group">';
+  node.options.forEach(opt => {
+    html += `<button class="btn" onclick="render('${opt.next}')">${opt.text}</button>`;
+  });
+  html += '</div></div>';
+  app.innerHTML = html;
+}
+
+function renderDiagnosis(node, app) {
+  let html = '<div class="card diagnosis-card">';
+  html += renderBreadcrumb();
+  html += `<span class="code">${node.code}</span>`;
+  html += `<h2>${node.title}</h2>`;
+  html += `<p>${node.description}</p>`;
+  if (node.criteria) {
+    html += '<ul>';
+    node.criteria.forEach(c => html += `<li>${c}</li>`);
+    html += '</ul>';
+  }
+  if (node.subtypes) {
+    html += '<div class="subtype"><strong>Kodierung / Subtypen:</strong><ul>';
+    node.subtypes.forEach(s => html += `<li>${s}</li>`);
+    html += '</ul></div>';
+  }
+  if (node.exclusion) {
+    html += `<div class="exclusion">${node.exclusion}</div>`;
+  }
+  html += `<button class="restart-btn" onclick="restart()">Neu starten</button>`;
+  html += '</div>';
+  app.innerHTML = html;
+}
+
+function restart() {
+  history = [];
+  render('start');
+}
+
+render('start');
+</script>
+</body>
+</html>
